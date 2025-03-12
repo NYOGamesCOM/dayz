@@ -29,7 +29,7 @@ Before you begin, ensure you have the following installed:
 1. **Clone the repository**:
    ```bash
    git clone [repository-url]
-   cd dayz-server-control-panel
+   cd dayz
    ```
 
 2. **Install Python dependencies**:
