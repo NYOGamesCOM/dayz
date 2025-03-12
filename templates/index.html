@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DayZ Server Control Panel</title>
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- jQuery and Socket.IO -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.1.3/socket.io.min.js"></script>
+  <style>
+  </style>
+</head>
+<body class="bg-gray-100">
+  <div class="container control-panel bg-white shadow-md rounded-lg p-8 max-w-3xl mx-auto mt-8">
+    <h1 class="text-center mb-4 dark:text-white">DayZ Server Control Panel</h1>
+    
+    <!-- Nav Tabs -->
+    <ul class="nav nav-tabs flex justify-around" id="controlTabs" role="tablist">
+      <li class="nav-item">
+        <a class="nav-link active dark:bg-gray-700 dark:text-white" id="control-tab" data-toggle="tab" href="#control" role="tab">Control</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link dark:bg-gray-700 dark:text-white" id="edit-tab" data-toggle="tab" href="#edit" role="tab">Edit Config</a>
+      </li>
+    </ul>
+    
+    <!-- Tab Content -->
+    <div class="tab-content" id="controlTabsContent">
+      <!-- Control Tab -->
+      <div class="tab-pane fade show active" id="control" role="tabpanel">
+        <div class="text-center my-3">
+          <div class="btn-group" role="group">
+            <button id="startBtn" class="btn btn-success bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Start Server</button>
+            <button id="stopBtn" class="btn btn-danger bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Stop Server</button>
+            <button id="restartBtn" class="btn btn-warning bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded">Restart Server</button>
+          </div>
+        </div>
+        <div class="text-center my-3">
+          <div class="btn-group" role="group">
+            <button id="listModsBtn" class="btn btn-info bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">List Mods</button>
+            <button id="onlinePlayersBtn" class="btn btn-primary bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">Online Players</button>
+          </div>
+        </div>
+        <div id="output" class="output p-4 rounded border dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+          <h4 class="dark:text-white">Real-Time Status Updates</h4>
+          <div id="realTimeData">
+            <p class="dark:text-gray-400">Loading data...</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Edit Config Tab -->
+      <div class="tab-pane fade" id="edit" role="tabpanel">
+        <h4 class="mt-3 dark:text-white">Edit Server Config</h4>
+        <form id="configForm">
+          <div id="configFields" class="dark:text-gray-400"></div>
+          <button type="button" id="refreshConfigBtn" class="btn btn-secondary bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">Refresh Config</button>
+          <button type="button" id="saveConfigBtn" class="btn btn-primary bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">Save Config</button>
+        </form>
+        <div id="configStatus" class="mt-2 dark:text-gray-400"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    $(document).ready(function(){
+      // Control Tab Button Actions
+      $('#startBtn').click(function(){
+        $.post('/start', function(data){
+          alert("Start: " + data.status);
+        });
+      });
+      $('#stopBtn').click(function(){
+        $.post('/stop', function(data){
+          alert("Stop: " + data.status);
+        });
+      });
+      $('#restartBtn').click(function(){
+        $.post('/restart', function(data){
+          alert("Restart: " + data.status);
+        });
+      });
+      $('#listModsBtn').click(function(){
+        $.get('/listmods', function(data){
+          alert("Mods: " + JSON.stringify(data.mods, null, 2));
+        });
+      });
+      $('#onlinePlayersBtn').click(function(){
+        $.get('/onlineplayers', function(data){
+          alert("Online Players: " + JSON.stringify(data.players, null, 2));
+        });
+      });
+      
+      // Socket.IO for real-time updates
+      var socket = io('/status');
+      socket.on('update_data', function(data) {
+        var html = '<p><strong>Online Players (' + data.players.length + '):</strong> ' + data.players.join(", ") + '</p>';
+        html += '<p><strong>Installed Mods (' + data.mods.length + '):</strong> ' + data.mods.join(", ") + '</p>';
+        $('#realTimeData').html(html);
+      });
+      
+      // Config Editing Functions
+      function loadConfig() {
+        console.log("loadConfig() function called"); // ADDED LOG
+        $.get('/get_config', function(data){
+          console.log("Data received from /get_config:", data); // ADDED LOG
+          if(data.config) {
+            var config = data.config;
+            console.log("Raw config content:", data.raw_config); // ADDED LOG
+            console.log("Parsed config:", data.config); // ADDED LOG
+            var html = '';
+            $.each(config, function(key, value){
+              html += '<div class="form-group config-field">';
+              html += '<label for="' + key + '">' + key + '</label>';
+              html += '<input type="text" class="form-control" id="' + key + '" name="' + key + '" value="' + value + '">';
+              html += '</div>';
+            });
+            $('#configFields').html(html);
+            $('#configStatus').html('<div class="alert alert-success">Config loaded successfully.</div>');
+          } else {
+            $('#configStatus').html('<div class="alert alert-danger">Error loading config.</div>');
+          }
+        }).  // Closing parenthesis for $.get
+        fail(function(jqXHR, textStatus, errorThrown){
+          console.error("AJAX request to /get_config failed:", textStatus, errorThrown); // ADDED LOG
+          $('#configStatus').html('<div class="alert alert-danger">Error loading config.</div>');
+        });
+      }
+      
+      $('#refreshConfigBtn').click(function(){
+        loadConfig();
+      });
+      
+      $('#saveConfigBtn').click(function(){
+        var newConfig = {};
+        $('#configForm').find('input').each(function(){
+          var key = $(this).attr('name');
+          var value = $(this).val();
+          newConfig[key] = value;
+        });
+        $.ajax({
+          url: '/save_config',
+          type: 'POST',
+          contentType: 'application/json',
+          data: JSON.stringify({config: newConfig}),
+          success: function(data) {
+            if(data.status.includes("successfully")){
+              $('#configStatus').html('<div class="alert alert-success">' + data.status + '</div>');
+            } else {
+              $('#configStatus').html('<div class="alert alert-danger">' + data.status + '</div>');
+            }
+          },
+          error: function() {
+            $('#configStatus').html('<div class="alert alert-danger">Error saving config.</div>');
+          }
+        });
+      });
+      
+      // Load config when the Edit Config tab is shown
+      $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+        if ($(e.target).attr('id') === 'edit-tab') {
+          loadConfig();
+        }
+      });
+    });
+  </script>
+  
+  <!-- Bootstrap JS and dependencies -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  <script>
+    document.documentElement.classList.add('dark');
+  </script>
+</body>
+</html>
